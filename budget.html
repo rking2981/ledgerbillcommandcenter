@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Ledger & Bill Command Center</title>
+    <style>
+        :root {
+            --paper-bg: #fdfdfd;
+            --ledger-blue: #d1e1f0;
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --ytd-purple: #8e44ad;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background: #e0e0e0; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1100px; margin: auto; background: var(--paper-bg); padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border-radius: 8px; }
+        
+        .filter-bar { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; gap: 15px; align-items: center; border: 1px solid #ccc; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #aaa; font-weight: bold; }
+
+        .ytd-dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .ytd-card { background: #f4f4f9; padding: 15px; border-radius: 8px; border-top: 4px solid var(--ytd-purple); box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .ytd-card h4 { margin: 0; font-size: 0.75rem; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+        .ytd-card p { font-size: 1.4rem; font-weight: bold; margin: 5px 0 0; color: var(--primary); }
+
+        nav { margin-bottom: 20px; border-bottom: 2px solid var(--primary); display: flex; gap: 5px; align-items: center; }
+        nav button { padding: 12px 20px; cursor: pointer; border: none; background: #ddd; font-weight: bold; border-radius: 5px 5px 0 0; }
+        nav button.active { background: var(--primary); color: white; }
+
+        .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-green { background: var(--success); }
+        .btn-blue { background: var(--accent); }
+        .btn-json { background: #607d8b; }
+
+        table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 20px; table-layout: fixed; }
+        th { background: var(--ledger-blue); color: var(--primary); border: 1px solid #aaa; padding: 12px; }
+        td { border: 1px solid #ddd; padding: 12px; text-align: center; overflow: hidden; }
+        
+        .bg-overdue { background-color: var(--danger) !important; color: white; font-weight: bold; }
+        .bg-near { background-color: var(--warning) !important; color: white; font-weight: bold; }
+
+        .drawer { background-color: #f9f9f9; display: none; }
+        .drawer td { text-align: left; padding: 15px 40px; border-bottom: 2px solid #ccc; }
+
+        .section-header { background: #eee; padding: 10px; font-weight: bold; border-left: 6px solid var(--primary); margin: 25px 0 10px; }
+
+        .chart-flex { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
+        .chart-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd; flex: 1; min-width: 300px; display: flex; align-items: center; gap: 20px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; margin-bottom: 4px; }
+        .color-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: white; padding: 15px; border-radius: 8px; border-left: 5px solid var(--accent); box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        .card h4 { margin: 0; font-size: 0.7rem; color: #777; text-transform: uppercase; }
+        .card p { font-size: 1.1rem; font-weight: bold; margin: 5px 0 0; }
+
+        .reminder { padding: 12px; margin-bottom: 10px; border-radius: 6px; font-weight: bold; }
+        .warn-txt { color: #d35400; background: #fff3e0; border: 1px solid #e67e22; }
+        .danger-txt { color: #c0392b; background: #f9ebea; border: 1px solid #e74c3c; }
+
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
+        .modal-content { background: white; width: 450px; margin: 5% auto; padding: 25px; border-radius: 12px; max-height: 80vh; overflow-y: auto; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; }
+        .form-group input { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header style="text-align: center; margin-bottom: 25px;">
+        <h1 style="color: var(--primary); margin: 0; font-size: 1.8rem; text-transform: uppercase; letter-spacing: 2px;">
+            The Ledger & Bill Command Center
+        </h1>
+        <p style="color: #666; font-size: 0.9rem; margin-top: 5px;">Personal Financial Tracking</p>
+    </header>
+
+    <div class="filter-bar">
+    <strong>Active Period:</strong>
+    <select id="filter-month" onchange="render()"></select>
+    <select id="filter-year" onchange="render()"></select>
+    
+    <div style="margin-left: auto; display: flex; gap: 10px;">
+        <button onclick="openModal('helpModal')" class="btn" style="background: #7f8c8d;">❓ How-To Guide</button>
+        
+        <button onclick="backupDatabase()" class="btn btn-json">💾 Save Changes</button>
+        <button onclick="document.getElementById('importFile').click()" class="btn btn-json">📂 Restore Backup</button>
+        <input type="file" id="importFile" style="display:none" onchange="restoreDatabase(event)">
+    </div>
+</div>
+
+    <div class="ytd-dashboard">
+        <div class="ytd-card"><h4>Gross YTD</h4><p id="ytd-gross-main">$0.00</p></div>
+        <div class="ytd-card"><h4>Deductions YTD</h4><p id="ytd-deduct-main">$0.00</p></div>
+        <div class="ytd-card"><h4>Net YTD</h4><p id="ytd-net-main">$0.00</p></div>
+    </div>
+
+    <nav>
+        <button id="btn-ledger" class="active" onclick="showPage('ledger')">Income Ledger</button>
+        <button id="btn-bills" onclick="showPage('bills')">Bills & Expenses</button>
+        <button onclick="exportFilteredCSV()" style="background: #555; margin-left: auto; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            📥 Export CSV
+        </button>
+    </nav>
+
+    <div id="page-ledger">
+        <button onclick="openModal('checkModal')" class="btn btn-green">+ Add Paycheck</button>
+        <table>
+            <thead><tr><th style="width:25%">Date</th><th style="width:25%">Gross</th><th style="width:25%">Net</th><th style="width:25%">Actions</th></tr></thead>
+            <tbody id="ledger-body"></tbody>
+        </table>
+        <div class="stats-grid">
+            <div class="card"><h4>Period Gross</h4><p id="p-gross">$0.00</p></div>
+            <div class="card"><h4>Period Deducts</h4><p id="p-deduct">$0.00</p></div>
+            <div class="card"><h4>Period Net</h4><p id="p-net">$0.00</p></div>
+        </div>
+    </div>
+
+    <div id="page-bills" class="hidden">
+        <div id="reminders"></div>
+        <div class="chart-flex">
+            <div class="chart-box">
+                <svg id="pie-chart" width="120" height="120" viewBox="-1 -1 2 2" style="transform: rotate(-90deg); border-radius: 50%; background: #eee;"></svg>
+                <div id="chart-legend" style="flex:1"></div>
+            </div>
+            <div class="card" style="flex:0.5; min-width: 200px; display:flex; flex-direction:column; justify-content:center;">
+                <h4>Remaining Net</h4>
+                <p id="bill-page-net" style="font-size: 1.8rem; color: var(--success);">$0.00</p>
+                <div style="margin-top:10px;">
+                    <button onclick="openModal('manageTypesModal')" class="btn btn-blue" style="font-size:0.8rem">⚙️ Types</button>
+                    <button onclick="openModal('addEntryModal')" class="btn btn-green" style="font-size:0.8rem">➕ Add</button>
+                </div>
+            </div>
+        </div>
+        <div class="section-header">RECURRING BILLS</div>
+        <table id="recurring-table">
+            <thead><tr><th>Paid</th><th>Company</th><th>Amount</th><th>Due Date</th><th>Paid Date</th><th>Actions</th></tr></thead>
+            <tbody id="recurring-body"></tbody>
+        </table>
+        <div class="section-header">ONE-TIME EXPENSES</div>
+        <table id="onetime-table">
+            <thead><tr><th>Paid</th><th>Company</th><th>Amount</th><th>Due Date</th><th>Paid Date</th><th>Actions</th></tr></thead>
+            <tbody id="onetime-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<footer style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 0.8rem;">
+    Copyright &copy; <span id="copyright-year"></span> Designed by Ryan King. All Rights Reserved.<br>
+    <small>The Ledger & Bill Command Center | v5.3 Stable (JSON Portable)</small>
+</footer>
+
+<div id="checkModal" class="modal"><div class="modal-content">
+    <h3>New Paycheck</h3>
+    <div class="form-group"><label>Date</label><input type="date" id="c-date"></div>
+    <div class="form-group"><label>Check #</label><input type="text" id="c-num"></div>
+    <div class="form-group"><label>Gross</label><input type="number" id="c-gross"></div>
+    <div id="d-area"></div>
+    <button onclick="addDeduct()">+ Deduction</button><hr>
+    <button class="btn btn-green" onclick="saveCheck()">Save</button>
+    <button onclick="closeModal('checkModal')">Cancel</button>
+</div></div>
+
+<div id="manageTypesModal" class="modal"><div class="modal-content">
+    <h3>Bill Library</h3>
+    <div id="type-list-editor" style="max-height:200px; overflow:auto; margin-bottom:15px; border:1px solid #eee;"></div>
+    <div class="form-group"><label>Name</label><input type="text" id="nt-name"></div>
+    <div class="form-group"><label><input type="checkbox" id="nt-rec"> Recurring</label></div>
+    <button class="btn btn-green" onclick="addBillType()">Add</button>
+    <button class="btn btn-blue" onclick="closeModal('manageTypesModal')">Done</button>
+</div></div>
+
+<div id="addEntryModal" class="modal"><div class="modal-content">
+    <h3>New Bill Entry</h3>
+    <div class="form-group"><label>Select Bill</label><select id="b-drop" style="width:100%; padding:8px;"></select></div>
+    <div class="form-group"><label>Amount</label><input type="number" id="e-amt"></div>
+    <div class="form-group"><label>Due Date</label><input type="date" id="e-due"></div>
+    <button class="btn btn-green" onclick="saveBillEntry()">Add</button>
+    <button onclick="closeModal('addEntryModal')">Cancel</button>
+</div></div>
+
+<div id="helpModal" class="modal">
+    <div class="modal-content" style="width: 550px;">
+        <h2 style="color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 10px;">Command Center Guide</h2>
+        <div style="text-align: left; line-height: 1.6;">
+            <p><strong>1. Filtering:</strong> Use the top dropdowns to select the month and year. Tables only show data for that specific period.</p>
+            <p><strong>2. Income Ledger:</strong> Add paychecks with gross pay and deductions. Click 🔽 to see the breakdown.</p>
+            <p><strong>3. Bill Management:</strong> Use <strong>⚙️ Manage Types</strong> to build your bill library, then <strong>➕ Add Bill</strong> to log a cost and due date.</p>
+            <p><strong>4. Data Safety:</strong> Data is saved to <strong>browser memory</strong>. If you clear cookies, all data is lost. Use <strong>💾 Save Changes</strong> to save a permanent file. If you saved previously, but cleared your browser cookies and data, you can restore to your last save using <strong>📂 Restore Backup</strong></p>
+            <p><strong>5. Liability:</strong> This system is provided as a personal budgeting tool for informational purposes only; it is not intended for tax preparation or legal matters, and the developer, Ryan King, assumes no liability for data loss or financial discrepancies, with all users proceeding strictly at their own risk.</p>
+        </div>
+        <hr>
+        <button class="btn btn-blue" onclick="closeModal('helpModal')">Got it!</button>
+    </div>
+</div>
+
+<script>
+    let DB = {
+        checks: JSON.parse(localStorage.getItem('v5_checks')) || [],
+        types: JSON.parse(localStorage.getItem('v5_types')) || [],
+        entries: JSON.parse(localStorage.getItem('v5_entries')) || []
+    };
+
+    function saveAll() {
+        localStorage.setItem('v5_checks', JSON.stringify(DB.checks));
+        localStorage.setItem('v5_types', JSON.stringify(DB.types));
+        localStorage.setItem('v5_entries', JSON.stringify(DB.entries));
+    }
+
+    function init() {
+        const ms = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const mS = document.getElementById('filter-month');
+        const yS = document.getElementById('filter-year');
+        ms.forEach((m, i) => mS.innerHTML += `<option value="${i}">${m}</option>`);
+        const yr = new Date().getFullYear();
+        for(let i=yr-2; i<=yr+2; i++) yS.innerHTML += `<option value="${i}">${i}</option>`;
+        mS.value = new Date().getMonth();
+        yS.value = yr;
+        document.getElementById('copyright-year').textContent = new Date().getFullYear();
+        render();
+    }
+
+    function showPage(p) {
+        document.getElementById('page-ledger').classList.toggle('hidden', p !== 'ledger');
+        document.getElementById('page-bills').classList.toggle('hidden', p !== 'bills');
+        document.getElementById('btn-ledger').className = p==='ledger'?'active':'';
+        document.getElementById('btn-bills').className = p==='bills'?'active':'';
+        render();
+    }
+
+    function openModal(id) {
+        if(id === 'manageTypesModal') renderTypeEditor();
+        if(id === 'addEntryModal') document.getElementById('b-drop').innerHTML = DB.types.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        document.getElementById(id).style.display = 'block';
+    }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // JSON DATABASE PORTABILITY
+    function backupDatabase() {
+        const dataStr = JSON.stringify(DB);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `CommandCenter_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function restoreDatabase(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (imported.checks && imported.entries) {
+                    DB = imported;
+                    saveAll();
+                    alert("Database Restored Successfully!");
+                    render();
+                } else { alert("Invalid Backup File."); }
+            } catch (err) { alert("Error reading file."); }
+        };
+        reader.readAsText(file);
+    }
+
+    // LOGIC
+    function addDeduct() {
+        const d = document.createElement('div');
+        d.className = 'form-group';
+        d.innerHTML = `<input type="text" class="dl" placeholder="Label" style="width:40%"> <input type="number" class="dv" placeholder="Amt" style="width:40%">`;
+        document.getElementById('d-area').appendChild(d);
+    }
+
+    function saveCheck() {
+        const check = { id: Date.now(), date: document.getElementById('c-date').value, gross: parseFloat(document.getElementById('c-gross').value)||0, num: document.getElementById('c-num').value, deducts: [], totalD: 0 };
+        document.querySelectorAll('#d-area .form-group').forEach(r => {
+            const v = parseFloat(r.querySelector('.dv').value)||0;
+            if(v > 0) { check.deducts.push({l: r.querySelector('.dl').value, v}); check.totalD += v; }
+        });
+        check.net = check.gross - check.totalD;
+        DB.checks.push(check);
+        saveAll();
+        document.getElementById('d-area').innerHTML = '';
+        closeModal('checkModal'); render();
+    }
+
+    function renderTypeEditor() {
+        document.getElementById('type-list-editor').innerHTML = DB.types.map((t, i) => `
+            <div style="display:flex; padding:5px; border-bottom:1px solid #eee; align-items:center; gap:5px;">
+                <input type="text" value="${t.name}" onchange="DB.types[${i}].name=this.value; saveAll();" style="flex:1">
+                <label style="font-size:0.7rem"><input type="checkbox" ${t.recurring?'checked':''} onchange="DB.types[${i}].recurring=this.checked; saveAll();"> Rec</label>
+                <button onclick="DB.types.splice(${i},1); saveAll(); renderTypeEditor();">🗑️</button>
+            </div>`).join('');
+    }
+
+    function addBillType() {
+        const ni = document.getElementById('nt-name');
+        if (ni.value) {
+            DB.types.push({ name: ni.value, recurring: document.getElementById('nt-rec').checked, id: Date.now() });
+            saveAll(); ni.value = ''; document.getElementById('nt-rec').checked = false; renderTypeEditor();
+        }
+    }
+
+    function saveBillEntry() {
+        const sid = document.getElementById('b-drop').value;
+        const amt = parseFloat(document.getElementById('e-amt').value);
+        const due = document.getElementById('e-due').value;
+        if (!sid || isNaN(amt) || !due) return alert("Missing info.");
+        const ti = DB.types.find(x => x.id == sid);
+        DB.entries.push({ name: ti.name, amt: amt, due: due, pd: '', p: false, recurring: ti.recurring, id: Date.now() });
+        saveAll(); document.getElementById('e-amt').value = ''; document.getElementById('e-due').value = ''; closeModal('addEntryModal'); render();
+    }
+
+    function render() {
+        const now = new Date(); now.setHours(0,0,0,0);
+        const selM = parseInt(document.getElementById('filter-month').value);
+        const selY = parseInt(document.getElementById('filter-year').value);
+
+        const ytdC = DB.checks.filter(c => new Date(c.date + "T00:00:00").getFullYear() === selY);
+        let yg=0, yd=0, yn=0; ytdC.forEach(c => { yg+=c.gross; yd+=c.totalD; yn+=c.net; });
+        document.getElementById('ytd-gross-main').textContent = `$${yg.toFixed(2)}`;
+        document.getElementById('ytd-deduct-main').textContent = `$${yd.toFixed(2)}`;
+        document.getElementById('ytd-net-main').textContent = `$${yn.toFixed(2)}`;
+
+        const curC = DB.checks.filter(c => { const d = new Date(c.date + "T00:00:00"); return d.getMonth() === selM && d.getFullYear() === selY; });
+        const lb = document.getElementById('ledger-body'); lb.innerHTML = '';
+        let pg=0, pn=0, pd=0;
+        curC.forEach(c => {
+            pg+=c.gross; pn+=c.net; pd+=c.totalD;
+            lb.innerHTML += `
+                <tr onclick="const dr=document.getElementById('dr-${c.id}'); dr.style.display=dr.style.display==='none'?'table-row':'none'">
+                    <td>${c.date}</td><td>$${c.gross.toFixed(2)}</td><td>$${c.net.toFixed(2)}</td>
+                    <td>🔽 <button onclick="event.stopPropagation(); if(confirm('Delete?')){DB.checks=DB.checks.filter(x=>x.id!==${c.id}); saveAll(); render();}">🗑️</button></td>
+                </tr>
+                <tr id="dr-${c.id}" class="drawer"><td colspan="4"><b>#</b> ${c.num} | <b>Deducts:</b> ${c.deducts.map(i=>`${i.l}: $${i.v}`).join(', ')}</td></tr>`;
+        });
+        document.getElementById('p-gross').innerText = `$${pg.toFixed(2)}`;
+        document.getElementById('p-deduct').innerText = `$${pd.toFixed(2)}`;
+        document.getElementById('p-net').innerText = `$${pn.toFixed(2)}`;
+
+        const curE = DB.entries.filter(e => { const d = new Date(e.due + "T00:00:00"); return d.getMonth() === selM && d.getFullYear() === selY; });
+        let ov=0, up=0; DB.entries.forEach(e => { if(!e.p){ const dd=new Date(e.due+"T00:00:00"); const diff=Math.ceil((dd-now)/(1000*60*60*24)); if(diff<0) ov++; else if(diff<=3) up++; } });
+        const rem = document.getElementById('reminders'); rem.innerHTML = '';
+        if(ov>0) rem.innerHTML += `<div class="reminder danger-txt">🚨 OVERDUE: ${ov} bill(s)!</div>`;
+        if(up>0) rem.innerHTML += `<div class="reminder warn-txt">⏳ UPCOMING: ${up} bill(s)!</div>`;
+
+        const rb = document.getElementById('recurring-body'); rb.innerHTML = '';
+        const ob = document.getElementById('onetime-body'); ob.innerHTML = '';
+        let paid=0; let cd={};
+        curE.forEach(e => {
+            if(e.p) paid+=e.amt; cd[e.name] = (cd[e.name]||0)+e.amt;
+            const dd=new Date(e.due+"T00:00:00"); const diff=Math.ceil((dd-now)/(1000*60*60*24));
+            let cls = (!e.p) ? (diff<0?"bg-overdue":(diff<=3?"bg-near":"")) : "";
+            const row = `<tr><td><input type="checkbox" ${e.p?'checked':''} onclick="togglePaid(${e.id})"></td><td>${e.name}</td><td>$${e.amt.toFixed(2)}</td><td class="${cls}">${e.due}</td><td>${e.pd||'--'}</td><td><button onclick="if(confirm('Delete?')){DB.entries=DB.entries.filter(x=>x.id!==${e.id}); saveAll(); render();}">🗑️</button></td></tr>`;
+            if(e.recurring) rb.innerHTML += row; else ob.innerHTML += row;
+        });
+        document.getElementById('bill-page-net').innerText = `$${(pn - paid).toFixed(2)}`;
+        renderPie(cd);
+    }
+
+    function togglePaid(id) {
+        DB.entries = DB.entries.map(e => e.id === id ? {...e, p: !e.p, pd: !e.p ? new Date().toISOString().split('T')[0] : ''} : e);
+        saveAll(); render();
+    }
+
+    function renderPie(data) {
+        const svg = document.getElementById('pie-chart'); const legend = document.getElementById('chart-legend');
+        svg.innerHTML = ''; legend.innerHTML = ''; const total = Object.values(data).reduce((a, b) => a + b, 0);
+        if(!total) return svg.innerHTML = '<circle cx="0" cy="0" r="1" fill="#eee"/>';
+        let cp=0; const cols = ['#3498db', '#27ae60', '#e74c3c', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
+        Object.entries(data).forEach(([n, v], i) => {
+            const p=v/total; const [sx, sy]=[Math.cos(2*Math.PI*cp), Math.sin(2*Math.PI*cp)];
+            cp+=p; const [ex, ey]=[Math.cos(2*Math.PI*cp), Math.sin(2*Math.PI*cp)];
+            svg.innerHTML += `<path d="M ${sx} ${sy} A 1 1 0 ${p>0.5?1:0} 1 ${ex} ${ey} L 0 0" fill="${cols[i%cols.length]}"></path>`;
+            legend.innerHTML += `<div class="legend-item"><div class="color-dot" style="background:${cols[i%cols.length]}"></div> ${n}: $${v.toFixed(2)}</div>`;
+        });
+    }
+
+    function exportFilteredCSV() {
+        const sm=parseInt(document.getElementById('filter-month').value); const sy=parseInt(document.getElementById('filter-year').value);
+        const ms=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const f=DB.checks.filter(c=>{ const d=new Date(c.date+"T00:00:00"); return d.getMonth()===sm && d.getFullYear()===sy; });
+        if(!f.length) return alert("No data.");
+        let csv="Date,Check #,Gross,Deducts,Net\n"; f.forEach(c => { csv+=`${c.date},${c.num},${c.gross.toFixed(2)},${c.totalD.toFixed(2)},${c.net.toFixed(2)}\n`; });
+        const b=new Blob([csv],{type:'text/csv'}); const u=URL.createObjectURL(b); const a=document.createElement('a');
+        a.href=u; a.download=`Ledger_${ms[sm]}_${sy}.csv`; a.click();
+    }
+
+    init();
+</script>
+</body>
+</html>
